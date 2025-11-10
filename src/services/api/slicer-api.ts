@@ -95,6 +95,14 @@ export async function sliceModel(
   modelId: string,
   parameters: SlicerParameters
 ): Promise<ApiResponse<SliceJob>> {
+  const requestBody = {
+    model_id: modelId,
+    parameters,
+  };
+
+  console.log('🚀 Slicing Request:', requestBody);
+  console.log('📊 Full Parameters:', JSON.stringify(parameters, null, 2));
+
   if (USE_MOCK) {
     await delay(800);
     return {
@@ -110,7 +118,7 @@ export async function sliceModel(
   const response = await fetch(`${API_BASE_URL}/slice`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_id: modelId, parameters }),
+    body: JSON.stringify(requestBody),
   });
 
   return response.json();
