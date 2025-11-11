@@ -275,6 +275,63 @@ All endpoints may return these error codes:
 
 ---
 
+## ⚠️ CRITICAL: Slicing Process Flow
+
+**THE SLICING PROCESS MUST BE PERFORMED ENTIRELY ON THE BACKEND, NOT ON THE FRONTEND**
+
+### Frontend Responsibilities (What Frontend DOES):
+- ✅ Collect all slicer parameters from the UI
+- ✅ Send POST request to `/slice` endpoint with `model_id` and complete `parameters` object
+- ✅ Display "Slicing..." status immediately after sending the request
+- ✅ Poll `/slice/{job_id}/status` endpoint to get progress updates
+- ✅ Display progress bar and status messages returned from the backend
+- ✅ Only show "Slicing Complete" when backend returns `status: "completed"`
+- ✅ Enable G-code download only after receiving `status: "completed"`
+
+### Frontend Responsibilities (What Frontend DOES NOT DO):
+- ❌ **DO NOT** perform any slicing calculations on the frontend
+- ❌ **DO NOT** simulate or mock the slicing process locally  
+- ❌ **DO NOT** generate fake progress updates
+- ❌ **DO NOT** process STL files or generate G-code on the client side
+- ❌ **DO NOT** assume slicing is complete until backend confirms `status: "completed"`
+
+### Backend Responsibilities (What Backend DOES):
+- ✅ Receive the full parameters object from the POST request
+- ✅ Perform all slicing calculations and algorithms
+- ✅ Generate the actual G-code file
+- ✅ Update job status and progress during processing
+- ✅ Return `status: "completed"` only when slicing is truly finished
+- ✅ Handle all file processing, model analysis, and toolpath generation
+
+### Workflow Example:
+
+```
+1. User clicks "Start Slicing" button
+   ↓
+2. Frontend sends: POST /slice { model_id, parameters }
+   ↓
+3. Backend receives request and starts slicing job
+   ↓
+4. Backend returns: { job_id, status: "queued" }
+   ↓
+5. Frontend starts polling: GET /slice/status/{job_id}
+   ↓
+6. Backend processes and updates status:
+   - status: "queued" → "processing" (progress: 0%)
+   - status: "processing" (progress: 25%)
+   - status: "processing" (progress: 50%)
+   - status: "processing" (progress: 75%)
+   - status: "completed" (progress: 100%)
+   ↓
+7. Frontend receives status: "completed"
+   ↓
+8. Frontend displays "Slicing Complete" and enables download button
+```
+
+**This ensures proper separation of concerns: UI on frontend, heavy processing on backend.**
+
+---
+
 ## Parameter Ranges
 
 | Parameter | Min | Max | Default | Unit |
