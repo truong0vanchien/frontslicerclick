@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { LeftSidebar } from '@/components/LeftSidebar';
 import { ModelViewer } from '@/components/ModelViewer';
-import { RightToolbar } from '@/components/RightToolbar';
+import { Toolbar } from '@/components/Toolbar';
 import { LineTypeLegend } from '@/components/LineTypeLegend';
+import { HomePage } from '@/components/HomePage';
 import { toast } from 'sonner';
 import {
   sliceModel,
@@ -13,24 +14,33 @@ import {
 import type { SlicerParameters as SlicerParams, SliceJob } from '@/types/slicer';
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState<'prepare' | 'preview' | 'device' | 'project'>('prepare');
+  const [activeTab, setActiveTab] = useState<'home' | 'prepare' | 'preview' | 'device' | 'project'>('home');
   const [parameters, setParameters] = useState<SlicerParams>(DEFAULT_PARAMETERS);
   const [isAdvanced, setIsAdvanced] = useState(false);
   const [sliceJob, setSliceJob] = useState<SliceJob>();
   const [isSlicing, setIsSlicing] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [modelUrl, setModelUrl] = useState<string>();
 
-  // Mock uploaded model for demo
-  const uploadedModel = {
+  const handleFileSelect = (file: File) => {
+    setUploadedFile(file);
+    const url = URL.createObjectURL(file);
+    setModelUrl(url);
+    toast.success(`Loaded ${file.name}`);
+    setActiveTab('prepare');
+  };
+
+  const uploadedModel = uploadedFile ? {
     model_id: 'demo-model-id',
-    filename: 'demo.stl',
-    file_size: 1024000,
+    filename: uploadedFile.name,
+    file_size: uploadedFile.size,
     bounds: {
       x: { min: 0, max: 100 },
       y: { min: 0, max: 100 },
       z: { min: 0, max: 50 },
     },
     uploaded_at: new Date().toISOString(),
-  };
+  } : null;
 
   // Poll for slice status
   useEffect(() => {
@@ -53,6 +63,11 @@ const Index = () => {
   }, [sliceJob]);
 
   const handleSlice = async () => {
+    if (!uploadedModel) {
+      toast.error('Please upload a model first');
+      return;
+    }
+    
     setIsSlicing(true);
     try {
       const response = await sliceModel(uploadedModel.model_id, parameters);
@@ -76,90 +91,102 @@ const Index = () => {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onSliceClick={handleSlice}
-        canSlice={!isSlicing}
+        canSlice={!isSlicing && !!uploadedModel}
+        onFileSelect={handleFileSelect}
       />
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar - Only show on Prepare and Preview tabs */}
-        {(activeTab === 'prepare' || activeTab === 'preview') && (
-          <LeftSidebar
-            parameters={parameters}
-            onChange={setParameters}
-            isAdvanced={isAdvanced}
-            onAdvancedToggle={setIsAdvanced}
+        {activeTab === 'home' && (
+          <HomePage 
+            onFileSelect={handleFileSelect}
+            onTabChange={setActiveTab}
           />
         )}
 
-        {/* Center - 3D Viewer */}
-        <div className="flex-1 relative bg-[#0d0f12]">
-          {activeTab === 'prepare' && (
-            <>
-              <ModelViewer />
-              <RightToolbar />
-              
-              {/* Plate indicator bottom-left */}
-              <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur border border-border rounded px-3 py-1.5 text-sm text-foreground">
-                Plate <span className="text-primary font-medium">01</span>
-              </div>
-            </>
-          )}
+        {activeTab !== 'home' && (
+          <>
+            {/* Left Sidebar - Only show on Prepare and Preview tabs */}
+            {(activeTab === 'prepare' || activeTab === 'preview') && (
+              <LeftSidebar
+                parameters={parameters}
+                onChange={setParameters}
+                isAdvanced={isAdvanced}
+                onAdvancedToggle={setIsAdvanced}
+              />
+            )}
 
-          {activeTab === 'preview' && (
-            <>
-              <ModelViewer />
-              <LineTypeLegend />
+            {/* Center - 3D Viewer */}
+            <div className="flex-1 relative bg-[#0d0f12]">
+              {activeTab === 'prepare' && (
+                <>
+                  <Toolbar onFileSelect={handleFileSelect} />
+                  <ModelViewer modelUrl={modelUrl} />
               
-              {/* Layer slider - would go here */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur border border-border rounded px-4 py-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">Layer:</span>
-                  <div className="w-64 h-1 bg-muted rounded-full">
-                    <div className="w-1/2 h-full bg-primary rounded-full" />
+                  {/* Plate indicator bottom-left */}
+                  <div className="absolute bottom-4 left-4 bg-[#2a2a2a]/95 backdrop-blur border border-border rounded px-3 py-1.5 text-sm text-foreground">
+                    Plate <span className="text-primary font-medium">01</span>
                   </div>
-                  <span className="text-xs text-foreground font-medium">1451 / 2902</span>
-                </div>
-              </div>
+                </>
+              )}
 
-              {/* G-code console bottom-right */}
-              <div className="absolute bottom-4 right-4 w-96 bg-card/95 backdrop-blur border border-border rounded-lg overflow-hidden">
-                <div className="px-3 py-1.5 bg-muted/30 border-b border-border flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground">G-code Preview</span>
-                  <span className="text-[10px] text-muted-foreground">23/37</span>
-                </div>
-                <div className="p-2 font-mono text-[10px] text-foreground space-y-0.5 max-h-32 overflow-y-auto">
-                  <div className="text-orange-400">1328213 G1 X42.268 Y72.762 E.05326</div>
-                  <div className="text-muted-foreground">1328214 ; stop printing object Iconner&bedsp3.stl id:1 copy 0</div>
-                  <div className="text-green-400">1328215 G1 E-.28 F1800</div>
-                  <div className="text-muted-foreground">1328216 ;WIPE_START</div>
-                  <div className="text-orange-400">1328217 G1 F4200</div>
-                  <div className="text-orange-400">1328218 G1 X40.853 Y74.176 E-.12</div>
-                  <div className="text-muted-foreground">1328219 ;WIPE_END</div>
-                  <div className="text-yellow-400">1328220 ;EXCLUDE_OBJECT_END NAME=Iconner_bedsp3.stl_id_1_copy_0</div>
-                  <div className="text-blue-400">1328221 M106 S0</div>
-                </div>
-              </div>
-            </>
-          )}
+              {activeTab === 'preview' && (
+                <>
+                  <ModelViewer modelUrl={modelUrl} />
+                  <LineTypeLegend />
+              
+                  {/* Layer slider - would go here */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#2a2a2a]/95 backdrop-blur border border-border rounded px-4 py-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">Layer:</span>
+                      <div className="w-64 h-1 bg-muted rounded-full">
+                        <div className="w-1/2 h-full bg-primary rounded-full" />
+                      </div>
+                      <span className="text-xs text-foreground font-medium">1451 / 2902</span>
+                    </div>
+                  </div>
 
-          {activeTab === 'device' && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-muted-foreground">
-                <p className="text-lg">Device tab</p>
-                <p className="text-sm mt-2">Connect to your 3D printer</p>
-              </div>
+                  {/* G-code console bottom-right */}
+                  <div className="absolute bottom-4 right-4 w-96 bg-[#2a2a2a]/95 backdrop-blur border border-border rounded-lg overflow-hidden">
+                    <div className="px-3 py-1.5 bg-muted/30 border-b border-border flex items-center justify-between">
+                      <span className="text-xs font-medium text-foreground">G-code Preview</span>
+                      <span className="text-[10px] text-muted-foreground">23/37</span>
+                    </div>
+                    <div className="p-2 font-mono text-[10px] text-foreground space-y-0.5 max-h-32 overflow-y-auto">
+                      <div className="text-orange-400">1328213 G1 X42.268 Y72.762 E.05326</div>
+                      <div className="text-muted-foreground">1328214 ; stop printing object Iconner&bedsp3.stl id:1 copy 0</div>
+                      <div className="text-green-400">1328215 G1 E-.28 F1800</div>
+                      <div className="text-muted-foreground">1328216 ;WIPE_START</div>
+                      <div className="text-orange-400">1328217 G1 F4200</div>
+                      <div className="text-orange-400">1328218 G1 X40.853 Y74.176 E-.12</div>
+                      <div className="text-muted-foreground">1328219 ;WIPE_END</div>
+                      <div className="text-yellow-400">1328220 ;EXCLUDE_OBJECT_END NAME=Iconner_bedsp3.stl_id_1_copy_0</div>
+                      <div className="text-blue-400">1328221 M106 S0</div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'device' && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-muted-foreground">
+                    <p className="text-lg">Device tab</p>
+                    <p className="text-sm mt-2">Connect to your 3D printer</p>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'project' && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-muted-foreground">
+                    <p className="text-lg">Project tab</p>
+                    <p className="text-sm mt-2">Manage your 3MF projects</p>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
-          {activeTab === 'project' && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-muted-foreground">
-                <p className="text-lg">Project tab</p>
-                <p className="text-sm mt-2">Manage your 3MF projects</p>
-              </div>
-            </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
